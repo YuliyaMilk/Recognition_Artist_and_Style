@@ -18,12 +18,17 @@ from sklearn.svm import LinearSVC
 from sklearn.preprocessing import StandardScaler
 import pickle
 from sklearn.pipeline import Pipeline
+import imutils
+from scipy.spatial import distance
 
 methods = [
             'Выберите метод',
             'SIFT',
             'Haralick',
             'Peak Local Max',
+            'ColorStandDev',
+            'Zernike',
+            'Shi_Tomasi'
         ]
 
 def dist(arr1, arr2):
@@ -53,6 +58,7 @@ class GUI:
 
         my_str.set("")
         file_path = filedialog.askopenfilename(filetypes=[('Image Files', '*jpg')])
+        self.file_path_src = file_path
         if file_path is not None:
             self.img_resized=Image.open(file_path)
             copy_img_resized = self.img_resized.copy()
@@ -118,6 +124,19 @@ class GUI:
             self.Haralick('./dataset/Artist')
         elif current_method == methods[3]:
             self.hash_classifier('./dataset/Artist')
+        elif current_method == methods[4]:
+            self.ColorMeanStandartDev('./dataset/Artist')
+        elif current_method == methods[5]:
+            # res=""
+            # i=24
+            # while (res!= "Rembrandt"):
+            #     i=i+1
+            #     res=self.Zernik('./dataset/Artist',i)
+            #     print(i,res)
+            self.Zernik('./dataset/Artist')
+        elif current_method == methods[6]:
+            self.Shi_Tomasi('./dataset/Artist')
+            
 
     def recognitionStyle(self):
         current_method = self.method.get()
@@ -127,6 +146,18 @@ class GUI:
             self.Haralick('./dataset/Style')
         elif current_method == methods[3]:
             self.hash_classifier('./dataset/Style')
+        elif current_method == methods[4]:
+            self.ColorMeanStandartDev('./dataset/Style')
+        elif current_method == methods[5]:
+            # res=""
+            # i=1
+            # while (res!= "Cubizm"):
+            #     i=i+1
+            #     res=self.Zernik('./dataset/Style',i)
+            #     print(i,res)
+            self.Zernik('./dataset/Style')
+        elif current_method == methods[6]:
+            self.Shi_Tomasi('./dataset/Style')
 
     def addDropdown(self):
         self.method = StringVar()
@@ -410,48 +441,6 @@ class GUI:
        # display the output image
         cv.imshow("Test_Image", image)
         cv.waitKey(0)
-        
-        # for _, dirs, _ in os.walk(dir_name):
-        #     for dir in dirs:
-        #         print(dir)
-        #         for _, _, files in os.walk(dir_name + '/' + dir):
-        #             for file in files:
-        #                 print(file)
-        #                 score = 0
-        #                 tmp_hash = self.CalcImageHash(dir_name + '/' + dir + '/' + file)
-        #                 score = self.CompareHash(_hash, tmp_hash)
-                        
-        #                 if (score < best['score']):
-        #                     best['score'] = score
-        #                     best['name'] = dir
-        #                     best['filepath'] = dir_name + '/' + dir + '/' + file
-                            
-        #             break
-                
-        #     break
-        # print(best['name'], best['filepath'])
-        
-
-        # self.addLabel('Автор: ' + best['name'])
-        # img_res = cv.imread(best['filepath'])
-        # # img_res = cv.resize(img_res, IMG_SIZE)
-        
-        # fig, axes = plt.subplots(2, 1, figsize=(8, 3), sharex=True, sharey=True)
-
-        # ax = axes.ravel()
-        # ax[0].imshow(image, cmap=plt.cm.gray)
-        # ax[0].axis('off')
-        # ax[0].set_title('Original')
-
-
-        # ax[2].imshow(img_res, cmap=plt.cm.gray)
-        # ax[2].axis('off')
-        # ax[2].set_title('Result')
-
-
-        # fig.tight_layout()
-
-        # plt.show()
 
 
     def CalcImageHash(self,FileName):
@@ -482,9 +471,234 @@ class GUI:
                 count=count+1
             i=i+1
         return count
-            
-            
+    
+    def ColorMeanStandartDev(self, dir_name):
+        open_cv_image = np.array(self.img_resized) 
+        open_cv_image = open_cv_image[:, :, ::-1].copy() 
+        (means, stds) = cv.meanStdDev(open_cv_image)
+        stats = np.concatenate([means, stds]).flatten()
+        best = { 'name': '', 'filepath': '', 'dist': 9999999999 }
         
+        for _, dirs, _ in os.walk(dir_name):
+            for dir in dirs:
+                print(dir)
+                for _, _, files in os.walk(dir_name + '/' + dir):
+                    for file in files:
+                        print(file)
+                        temp_im = cv.imread(dir_name + '/' + dir + '/' + file)
+                        (tmp_means, tmp_stds) = cv.meanStdDev(temp_im)
+                        tmp_stats = np.concatenate([tmp_means, tmp_stds]).flatten()
+                        min_dist = dist(stats, tmp_stats)
+                        if min_dist < best['dist']:
+                            best['dist'] = min_dist
+                            best['name'] = dir
+                            best['filepath'] = dir_name + '/' + dir + '/' + file
+                    break
+                
+            break
+
+        print(best['name'])
+        if dir_name == './dataset/Artist':
+            self.addLabel('Автор: ' + best['name'], LABEL_TYPE['author'])
+        elif dir_name == './dataset/Style':
+            self.addLabel('Cтиль: ' + best['name'], LABEL_TYPE['style'])
+    
+    def Zernik(self, dir_name):
+        # image = np.array(self.img_resized)
+        image = cv.imread(self.file_path_src)
+        image_copy = image.copy()
+        # image_copy = image_copy[:, :, 0] 
+        (_, ZernikeFeatures) = self.describeShapes(image_copy)
+        best = { 'name': '', 'filepath': '', 'dist': 9999999999 }
+        # degree = 10
+        radius = 25
+        # zernik_feature = mahotas.features.zernike_moments(image_copy, radius, degree=8)
+
+        train_features = []
+        train_labels = []
+        for _, dirs, _ in os.walk(dir_name):
+            for dir in dirs:
+                
+                for _, _, files in os.walk(dir_name + '/' + dir):
+                    for file in files:
+                        print(file)
+                        cv_img = cv.imread(dir_name + '/' + dir + '/' + file)
+                        # tmp_img = np.array(cv_img) 
+                        tmp_image_copy = cv_img.copy()
+                        # tmp_image_copy = tmp_image_copy[:, :, 0] 
+                        # tmp_zernik_feature = mahotas.features.zernike_moments(tmp_image_copy, radius, degree=8)
+                        (cnts, tmpFeatures) = self.describeShapes(tmp_image_copy)
+                        D = distance.cdist(ZernikeFeatures, tmpFeatures)
+                        min_dist = np.min(D)
+                        # min_dist = min_dist + dist(zernik_feature, tmp_zernik_feature)
+                        # n=n+1
+                        # train_labels.append(dir)
+                        # train_features.append(tmp_zernik_feature)
+                        if min_dist < best['dist']:
+                            best['dist'] = min_dist
+                            best['name'] = dir
+                            best['filepath'] = dir_name + '/' + dir + '/' + file
+                    break
+                
+            break
+
+        print(best['name'])
+
+        
+        # clf_svm = Pipeline([('scaler', StandardScaler()), ('clf', LinearSVC(C=5,random_state=2, max_iter=50000))])
+
+        # clf_svm.fit(train_features, train_labels)
+
+        if dir_name == './dataset/Artist':
+            pass
+            # clf_svm = pickle.load(open("artist_classifier_haralick.sav", 'rb'))
+            # pickle.dump(clf_svm, open('artist_classifier_zernik.sav', 'wb'))
+        elif dir_name == './dataset/Style':
+            pass
+            # clf_svm = pickle.load(open("style_classifier_haralick.sav", 'rb'))
+            # pickle.dump(clf_svm, open('style_classifier_zernik.sav', 'wb'))
+
+        
+
+        # prediction = clf_svm.predict(zernik_feature.reshape(1, -1))[0]
+
+        # return prediction
+        # cv.putText(image, prediction, (20,30), cv.FONT_HERSHEY_SIMPLEX, 1.0, (0,255,255), 3)
+
+        if dir_name == './dataset/Artist':
+            self.addLabel('Автор: ' + best["name"], LABEL_TYPE['author'])
+        elif dir_name == './dataset/Style':
+            self.addLabel('Cтиль: ' + best["name"], LABEL_TYPE['style'])
+
+
+    def describeShapes (self, image):
+        shapeFeatures = []
+        scale_percent = 60 # percent of original size
+        width = int(image.shape[1] * scale_percent / 100)
+        height = int(image.shape[0] * scale_percent / 100)
+        dim = (width, height)
+        
+        # resize image
+        resized = cv.resize(image, dim, interpolation = cv.INTER_AREA)
+  
+        # convert the image to grayscale, blur it, and threshold it
+        gray = cv.cvtColor(resized, cv.COLOR_BGR2GRAY)
+        blurred = cv.GaussianBlur(gray, (13, 13), 0)
+        thresh = cv.threshold(blurred, 50, 255, cv.THRESH_BINARY)[1]
+    
+        # perform a series of dilations and erosions to close holes
+        # in the shapes
+        thresh = cv.dilate(thresh, None, iterations=4)
+        thresh = cv.erode(thresh, None, iterations=2)
+    
+        # detect contours in the edge map
+        cnts = cv.findContours(thresh.copy(), cv.RETR_EXTERNAL,
+            cv.CHAIN_APPROX_SIMPLE)
+        cnts = imutils.grab_contours(cnts)
+    
+        # loop over the contours
+        for c in cnts:
+            # create an empty mask for the contour and draw it
+            mask = np.zeros(resized.shape[:2], dtype="uint8")
+            cv.drawContours(mask, [c], -1, 255, -1)
+    
+            # extract the bounding box ROI from the mask
+            (x, y, w, h) = cv.boundingRect(c)
+            roi = mask[y:y + h, x:x + w]
+    
+            # compute Zernike Moments for the ROI and update the list
+            # of shape features
+            features = mahotas.features.zernike_moments(roi, cv.minEnclosingCircle(c)[1], degree=8)
+            shapeFeatures.append(features)
+    
+        # return a tuple of the contours and shapes
+        return (cnts, shapeFeatures)
+
+    def Shi_Tomasi(self, dir_name):
+        image = np.array(self.img_resized)
+        image_copy = image.copy()
+        image_copy = image_copy[:, :, 0] 
+        # print('1')
+        # kr_feature = ski_methods.corner_kitchen_rosenfeld(image_copy, mode='constant', cval=0)
+        # print('2')
+        # kr_peaks = ski_methods.corner_peaks(kr_feature,min_distance=5)
+        # print('3')
+        # print(kr_feature)
+        # imshow(kr_feature)
+        # show()
+
+        bf = cv.BFMatcher()
+        best = { 'name': '', 'filepath': '', 'score': 0 }
+        # kr_peaks = cv.goodFeaturesToTrack(image_copy, 100, 0.01, 10)
+        im, des = self.extractFeatures(image_copy)
+        train_features = []
+        train_labels = []
+        for _, dirs, _ in os.walk(dir_name):
+            for dir in dirs:
+                for _, _, files in os.walk(dir_name + '/' + dir):
+                    for file in files:
+                        print(file)
+                        cv_img = cv.imread(dir_name + '/' + dir + '/' + file)
+                        tmp_img = np.array(cv_img) 
+                        tmp_image_copy = tmp_img.copy()
+                        tmp_image_copy = tmp_image_copy[:, :, 0] 
+                        tmp_im, tmp_des = self.extractFeatures(tmp_image_copy)
+                        matches = bf.knnMatch(des, tmp_des, k=2)
+                        good = []
+                        if len(matches) < best['score']:
+                            continue
+                        for m, n in matches:
+                            if m.distance < 0.75*n.distance:
+                                good.append([m])
+                        if len(good) > best['score']:
+                            best['score'] = len(good)
+                            best['name'] = dir
+                            best['filepath'] = dir_name + '/' + dir + '/' + file
+                            
+                        # tmp_peaks = cv.goodFeaturesToTrack(image_copy, 100, 0.01, 10)
+                        # train_labels.append(dir)
+                        # train_features.append(tmp_peaks)
+                
+                    break
+            break
+
+       
+        # clf_svm = Pipeline([('scaler', StandardScaler()), ('clf', LinearSVC(C=5,random_state=2, max_iter=50000))])
+
+        # clf_svm.fit(train_features, train_labels)
+
+        if dir_name == './dataset/Artist':
+            pass
+            # clf_svm = pickle.load(open("artist_classifier_haralick.sav", 'rb'))
+            # pickle.dump(clf_svm, open('artist_classifier_zernik.sav', 'wb'))
+        elif dir_name == './dataset/Style':
+            pass
+            # clf_svm = pickle.load(open("style_classifier_haralick.sav", 'rb'))
+            # pickle.dump(clf_svm, open('style_classifier_zernik.sav', 'wb'))
+
+        
+
+        # prediction = clf_svm.predict(kr_peaks.reshape(1, -1))[0]
+
+        # return prediction
+        # cv.putText(image, prediction, (20,30), cv.FONT_HERSHEY_SIMPLEX, 1.0, (0,255,255), 3)
+
+        if dir_name == './dataset/Artist':
+            self.addLabel('Автор: ' + best["name"], LABEL_TYPE['author'])
+        elif dir_name == './dataset/Style':
+            self.addLabel('Cтиль: ' + best["name"], LABEL_TYPE['style'])
+
+    def extractFeatures(self,img):
+        orb = cv.ORB_create()
+        # detection
+        pts = cv.goodFeaturesToTrack(img, 3000, qualityLevel=0.01, minDistance=7)
+
+        # extraction
+        kps = [cv.KeyPoint(x=f[0][0], y=f[0][1], _size=20) for f in pts]
+        kps, des = orb.compute(img, kps)
+
+        # return pts and des
+        return np.array([(kp.pt[0], kp.pt[1]) for kp in kps]), des     
     
 gui = GUI()
 
